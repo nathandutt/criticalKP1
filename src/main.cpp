@@ -51,7 +51,7 @@ struct Config{
 };
 
 //Read soliton parameters
-void ReadParameters(fstream& file, vector<complex<double>>& k_s, vector<complex<double>>& offsets){
+void readParameters(fstream& file, vector<complex<double>>& k_s, vector<complex<double>>& offsets){
     double k_re, o_re, k_im, o_im;
     while(file >> k_re >> k_im >> o_re >> o_im){
 	auto k = complex<double>(k_re, k_im); 
@@ -64,7 +64,7 @@ void ReadParameters(fstream& file, vector<complex<double>>& k_s, vector<complex<
 }
 
 //Evolve soliton offsets for a fixed time
-vector<complex<double>> EvolveOffsets(double t,const vector<complex<double>>& k_s, const vector<complex<double>>& offsets){
+vector<complex<double>> evolveOffsets(double t,const vector<complex<double>>& k_s, const vector<complex<double>>& offsets){
     auto new_offsets = std::vector<complex<double>>{};
     if(k_s.size()!=offsets.size()) throw std::runtime_error("Nonequal k_s and offsets");
     for(unsigned int i = 0; i < k_s.size(); i++){
@@ -126,7 +126,7 @@ int main(){
 	offsets = randomOffsets(rng, x_min, x_max, y_min, y_max);
     }
     else{
-	ReadParameters(file, k_s, offsets);
+	readParameters(file, k_s, offsets);
     }
     //Print Solitons
     for(const auto & k : k_s)
@@ -151,10 +151,10 @@ int main(){
 
 	cout << "Time = " << current_time << endl;
 	std::cout << "Evolving offsets" << endl;
-	auto t_offsets = EvolveOffsets(current_time, k_s, offsets);
+	auto t_offsets = evolveOffsets(current_time, k_s, offsets);
 	cout << "Fetching initial condition" << endl;
 	//Initialize poles
-	auto [p, v] = InitialConditions(k_s, t_offsets, config.y_i);
+	auto [p, v] = initialConditions(k_s, t_offsets, config.y_i);
 	PoleState poles(config.y_i, p, v);
 	for(int i = 0; i < N; i++)
 	    cout << "("<<v(0,i) <<"," << v(1, i) <<")";
@@ -174,11 +174,11 @@ int main(){
 	Eigen::VectorXd x_vals = Eigen::VectorXd::LinSpaced(config.x_points, config.x_i, config.x_f);
 	while(current_y < config.y_f){
 	    if(curr_step%write_step ==0){
-		poles.Insert(states);
+		poles.insertInto(states);
 		next_write_y += config.y_write_step;
 	    }
 	    curr_step++;
-	    poles.Evolve(config.y_step);
+	    poles.evolveRK4(config.y_step);
 	    current_y = poles.y;
 	}
 	cout << "Finished CMS evolution." << endl;
@@ -190,8 +190,8 @@ int main(){
 	Eigen::VectorXd prev_phi_x, prev_phi_y;
 	cout << "Now looking for critical pts" << endl; 
 	if (!states.empty()) {
-	    prev_phi_x = Phi_x(*states[0], config.x_i, config.x_f, config.x_points);
-	    prev_phi_y = Phi_y(*states[0], config.x_i, config.x_f, config.x_points);
+	    prev_phi_x = phiX(*states[0], config.x_i, config.x_f, config.x_points);
+	    prev_phi_y = phiY(*states[0], config.x_i, config.x_f, config.x_points);
 	}
 
 	for (std::size_t i = 0; i + 1 < states.size(); ++i) {
@@ -199,8 +199,8 @@ int main(){
 	    SavedState& next    = *states[i + 1];
 
 	    // reuse prev_phi_x/prev_phi_y for current
-	    Eigen::VectorXd phi_x_next = Phi_x(next, config.x_i, config.x_f, config.x_points);
-	    Eigen::VectorXd phi_y_next = Phi_y(next, config.x_i, config.x_f, config.x_points);
+	    Eigen::VectorXd phi_x_next = phiX(next, config.x_i, config.x_f, config.x_points);
+	    Eigen::VectorXd phi_y_next = phiY(next, config.x_i, config.x_f, config.x_points);
 
 	    double y1 = current.y;
 	    double y2 = next.y;

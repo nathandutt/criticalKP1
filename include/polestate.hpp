@@ -18,10 +18,10 @@ struct PoleState {
     PoleState(const double y_i, Column&& p, Column&& v)
         : y(y_i), poles(std::move(p)), velocity(std::move(v)) {}
 
-    void Evolve(const double timestep);
+    void evolveRK4(const double timestep);
     //implemented in .cpp, RK4 evolution of CalogeroMoser Hamiltonian
 
-    void Insert(std::vector<std::unique_ptr<SavedState>>& v){
+    void insertInto(std::vector<std::unique_ptr<SavedState>>& v){
 	v.emplace_back(std::make_unique<SavedState>(y, poles, velocity));
     }
      

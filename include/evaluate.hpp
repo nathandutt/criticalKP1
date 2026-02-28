@@ -5,7 +5,7 @@
 //
 // Quickly computing x, y derivatives of field when given poles at certain y
 // Computes over x, in a given range
-Eigen::VectorXd Phi_x(const SavedState& state, const double x_i, const double x_f, const int points) {
+Eigen::VectorXd phiX(const SavedState& state, const double x_i, const double x_f, const int points) {
     Eigen::VectorXd x_vals = Eigen::VectorXd::LinSpaced(points, x_i, x_f);
     Eigen::VectorXd f_vals = Eigen::VectorXd::Zero(points);
 
@@ -20,7 +20,7 @@ Eigen::VectorXd Phi_x(const SavedState& state, const double x_i, const double x_
     return f_vals;
 }
 
-Eigen::VectorXd Phi_y(const SavedState& state, const double x_i, const double x_f, const int points) {
+Eigen::VectorXd phiY(const SavedState& state, const double x_i, const double x_f, const int points) {
     Eigen::VectorXd x_vals = Eigen::VectorXd::LinSpaced(points, x_i, x_f);
     Eigen::VectorXd f_vals = Eigen::VectorXd::Zero(points);
 

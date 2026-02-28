@@ -5,7 +5,7 @@ using complex = std::complex<double>;
 using Matrix  = Eigen::MatrixXcd;
 using Vector  = Eigen::VectorXcd;
 
-Matrix Hirota(const std::vector<complex>& k_s,
+Matrix hirota(const std::vector<complex>& k_s,
               const std::vector<complex>& offsets,
               const double y_i)
 {
@@ -25,7 +25,7 @@ Matrix Hirota(const std::vector<complex>& k_s,
     return H;
 }
 
-Matrix K(const std::vector<complex>& k_s)
+Matrix kMatrix(const std::vector<complex>& k_s)
 {
     if((int) k_s.size() != N) 
 	throw std::runtime_error("Wrong number of k or offsets");
@@ -38,7 +38,7 @@ Matrix K(const std::vector<complex>& k_s)
     return Km;
 }
 
-auto InitialConditions(const std::vector<complex>& k_s,
+auto initialConditions(const std::vector<complex>& k_s,
                       const std::vector<complex>& offsets,
                       const double y_i)
 -> std::pair<Column, Column>
@@ -50,8 +50,8 @@ auto InitialConditions(const std::vector<complex>& k_s,
     if((int) k_s.size() != N || offsets.size() != N)
 	throw std::runtime_error("Wrong number of k or offsets");
 
-    Matrix H  = Hirota(k_s, offsets, y_i);
-    Matrix Km = K(k_s);
+    Matrix H  = hirota(k_s, offsets, y_i);
+    Matrix Km = kMatrix(k_s);
 
     // Compute eigenvalues and right eigenvectors
     Eigen::ComplexEigenSolver<Matrix> solver(H);

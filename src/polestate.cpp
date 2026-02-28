@@ -2,45 +2,7 @@
 #include <stdexcept>
 #include <iostream>
 
-//Column F(const Column& m, double& min_c){
-//    //Takes a column c of poles, and returns a column of forces
-//    // where F_i_x = \sum_{j \neq i} r_ij^-6 * (x_ij^3 - 3x_ijy_ij^2)
-//    // and F_i_y = \sum_{j\neqi} r_ij^-6 * (x_ij^3 - 3x_ij^2y_ij)
-//
-//    //We want to take advantage of vectorization possibilities
-//    
-//    Column f = Column::Zero();
-//
-//    Eigen::Array<double, 1, N> r_squared =
-//        m.row(0).array().square() + m.row(1).array().square();
-//
-//    if(min_c < 0.)
-//	min_c = r_squared.maxCoeff();
-//
-//    Eigen::Array<double, 1, N> r_cubed_inv = r_squared.pow(-1.5);
-//
-//    Eigen::Array<double, 1, N> num0 =
-//        m.row(0).array().cube() - 3 * m.row(0).array() * m.row(1).array().square();
-//
-//    Eigen::Array<double, 1, N> num1 =
-//        m.row(1).array().cube() - 3 * m.row(1).array() * m.row(0).array().square();
-//
-//    Eigen::Array<double, 2, N> numerators;
-//    numerators.row(0) = r_cubed_inv * num0;
-//    numerators.row(1) = r_cubed_inv * num1;
-//
-//    for (int i = 0; i < N; ++i)
-//    {
-//        Eigen::Array<bool, 1, N> mask = Eigen::Array<bool, 1, N>::Constant(N, true);
-//        mask(i) = false;
-//
-//        f(0, i) = (numerators.row(0) * mask.cast<double>()).sum();
-//        f(1, i) = (numerators.row(1) * mask.cast<double>()).sum();
-//    }
-//
-//    return f;
-//}
-
+//Force computation
 Column F(const Column& m, double& max_c) {
     // m.row(0) = x coordinates, m.row(1) = y coordinates
     Column f = Column::Zero();
@@ -85,7 +47,7 @@ Column F(const Column& m, double& max_c) {
 }
 
 constexpr double adaptative_pow = 1.;
-void PoleState::Evolve(const double timestep){
+void PoleState::evolveRK4(const double timestep){
     //RK4 evolution with adaptative timestep
     double max_c = -1.;
 
