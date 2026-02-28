@@ -84,11 +84,11 @@ ani = FuncAnimation(
         fig,
         update,
         frames=T,
-        interval=2000 // T,
+        interval=20000 // T,
         blit=True
         )
 
-ani.save("animation.mp4", writer="ffmpeg", fps=30)
+#ani.save("animation.mp4", writer="ffmpeg", fps=30)
 
 
 plt.show()

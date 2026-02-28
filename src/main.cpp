@@ -1,6 +1,7 @@
 #include "global.hpp"
 #include <algorithm>
 #include "polestate.hpp"
+#include "randomsoliton.hpp"
 #include "initialcondition.hpp"
 #include "bilinearinterp.hpp"
 #include "evaluate.hpp"
@@ -16,6 +17,7 @@
 #include <iomanip>
 
 using namespace std;
+using myRNG = std::mt19937;
 /*
  *       Format of params.txt
  *       t_i  t_f  t_step
@@ -72,7 +74,7 @@ vector<complex<double>> EvolveOffsets(double t,const vector<complex<double>>& k_
     return new_offsets;
 }
 
-constexpr unsigned long max_points=10;
+constexpr unsigned long max_points=120;
 int addPointsToData(const std::vector<Point>& cpoints, std::vector<double>& data){
     //We add the critical points to data.
     //If there are less than 6, (To be adapted maybe later on for larger N), we add a padding
@@ -100,7 +102,12 @@ int addPointsToData(const std::vector<Point>& cpoints, std::vector<double>& data
 int main(){
     const string input_file = "params.txt";
     const string output_dir = "Output/";
+    const bool use_random = true;
+    double x_min = -1.; double x_max = 1.;
+    double y_min = -1.; double y_max = 1.;
+    double max_mod_k = 1.;
     fstream file;
+
     auto k_s = vector<complex<double>>{};
     auto offsets = vector<complex<double>>{};
 
@@ -112,10 +119,22 @@ int main(){
     config.Print();
 
     //Get soliton parameters
-    ReadParameters(file, k_s, offsets);
+    if(use_random){
+	std::random_device dev;
+	myRNG rng(dev());
+	k_s = randomKs(rng, max_mod_k);
+	offsets = randomOffsets(rng, x_min, x_max, y_min, y_max);
+    }
+    else{
+	ReadParameters(file, k_s, offsets);
+    }
+    //Print Solitons
     for(const auto & k : k_s)
 	cout << k << ", ";
     cout << endl;
+    char dummy;
+    cin >> dummy;
+
     file.close();
 
     int pole_number = k_s.size();

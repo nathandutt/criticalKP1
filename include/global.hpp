@@ -1,7 +1,7 @@
 #pragma once
 #include <Eigen/Dense>
 
-constexpr int N = 4;
+constexpr int N = 60;
 using Column = Eigen::Matrix<double, 2, N>;  
 
 struct SavedState{
