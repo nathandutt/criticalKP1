@@ -1,28 +1,40 @@
-#include "global.hpp"
-#include <algorithm>
-#include "polestate.hpp"
-#include "randomsoliton.hpp"
-#include "initialcondition.hpp"
-#include "bilinearinterp.hpp"
-#include "evaluate.hpp"
-#include "npy.hpp"
-
+#include <sstream>
 #include <fstream>
 #include <iostream>
+
+#include <iomanip>
+#include <stdexcept>
+
 #include <vector>
 #include <complex>
-#include <stdexcept>
+#include <algorithm>
 #include <cmath>
-#include <sstream>
-#include <iomanip>
+
+#include "global.hpp" 			//Global parameters, set number of solitons here
+					//Has to be a global constant <100 because uses stack memory
+
+#include "randomsoliton.hpp"		//Generate random soliton parameters
+
+#include "initialcondition.hpp"		//Get initial conditions for fixed t
+					//(Diagonalization of Hirota matrix)
+
+#include "polestate.hpp"		//RK4 evolution of poles
+
+#include "bilinearinterp.hpp"		//Header defining interpolation functions for critical pts
+
+#include "evaluate.hpp"			//Quick evaluation of field given poles
+
+#include "npy.hpp"			//Header to easily write data to .npy format
+
 
 using namespace std;
 using myRNG = std::mt19937;
+
 /*
  *       Format of params.txt
- *       t_i  t_f  t_step
- *       y_i  y_f  y_step y_write_step
- *       x_i  x_f  x_step 
+ *       t_i  t_end  t_step
+ *       y_start  y_f  y_step y_write_step
+ *       x_start  x_end  x_step 
  *       k1_re  k1_im  o1_re  o1_im
  *       ...
  *       kn_re  kn_im  on_re  on_im
@@ -30,67 +42,118 @@ using myRNG = std::mt19937;
 
 //Read Evolution parameters
 struct Config{
-    double y_i; double y_f; double y_step; double y_write_step;
-    double x_i; double x_f; double x_points;
-    double t_i; double t_f; double t_step;
+    double y_start; double y_end; int y_points; double cms_step;
+    double x_start; double x_end; int x_points;
+    double t_start; double t_end; int t_points;
 
-    Config(fstream& file){
-	file >> t_i >> t_f >> t_step;
-	file >> y_i >> y_f >> y_step >> y_write_step;
-	file >> x_i >> x_f >> x_points;
+    Config(const std::string& filename){
+	fstream file;
+	file.open(filename, ios::in);
+
+	string str;
+	while(getline(file, str)){
+	    stringstream ss(str);
+	    
+	    //Skip comments or empty lines
+	    if(str[0] == '#' || str.empty())
+		continue;
+	    string key, val;
+	    ss >> key >> val;
+
+	    if(key == "y_start") y_start = stod(val);
+	    else if(key == "y_end") y_end = stod(val);
+	    else if(key == "y_points") y_points = stoi(val);
+	    else if(key == "cms_step") cms_step = stod(val);
+	    else if(key == "x_start") x_start = stod(val);
+	    else if(key == "x_end") x_end = stod(val);
+	    else if(key == "x_points") x_points = stoi(val);
+	    else if(key == "t_start") t_start = stod(val);
+	    else if(key == "t_end") t_end = stod(val);
+	    else if(key == "t_points") t_points = stoi(val);
+	    else{
+		string exception = "Invalid Parameter name : " + key;
+		throw std::runtime_error(exception);
+	    }
+
+	}
     }
     void Print(){
 	cout << "Y parameters are: " << endl
-	    << "Initial y: " << y_i << " Final y: " << y_f <<
-	    " Pole integration step: " << y_step << " Zero finding step: " << y_write_step << endl
+	    << "Initial y: " << y_start << " Final y: " << y_end <<
+	    " Pole integration step: " << cms_step << " Written y points: " << y_points << endl
 	    << "X parameters are: " << endl
-	    << "Initial x: " << x_i << " Final x: " << x_f << " Zero finding step: " <<x_points << endl
+	    << "Initial x: " << x_start << " Final x: " << x_end << " x points :" <<x_points << endl
 	    << "T parameters are: " << endl
-	    << "Initial t: " << t_i << " Final t: " << t_f << " Timestep:" << t_step << endl;
+	    << "Initial t: " << t_start << " Final t: " << t_end << "T points : " << t_points << endl;
     }
 };
 
 //Read soliton parameters
-void readParameters(fstream& file, vector<complex<double>>& k_s, vector<complex<double>>& offsets){
-    double k_re, o_re, k_im, o_im;
-    while(file >> k_re >> k_im >> o_re >> o_im){
-	auto k = complex<double>(k_re, k_im); 
-	auto o = complex<double>(o_re, o_im); 
+void readParameters(const std::string& filename, vector<complex<double>>& k_s, vector<complex<double>>& offsets){
+    fstream file;
+    file.open(filename, ios::in);
+
+    string s; getline(file, s); //Skip first line
+
+    while(getline(file, s)){
+
+	if(s.empty())
+	    continue;
+	//Read off soliton parameters from line
+	stringstream ss(s);
+	double k_re, o_re, k_im, o_im;
+	if(!(ss >> k_re >> k_im >> o_re >> o_im))
+	    continue;
+
+	//Create complex number from real and imag part
+	complex<double> k(k_re, k_im);
+	complex<double> o(o_re, o_im);
+
+	//Store k and conj(k) in vector
 	k_s.emplace_back(k);
+	k_s.emplace_back(conj(k));
+
+	//Same for o
 	offsets.emplace_back(o);
 	offsets.emplace_back(conj(o));
-	k_s.emplace_back(conj(k));
     }
 }
 
 //Evolve soliton offsets for a fixed time
-vector<complex<double>> evolveOffsets(double t,const vector<complex<double>>& k_s, const vector<complex<double>>& offsets){
-    auto new_offsets = std::vector<complex<double>>{};
+vector<complex<double>> evolveOffsets(const double t, const vector<complex<double>>& k_s, const vector<complex<double>>& offsets){
     if(k_s.size()!=offsets.size()) throw std::runtime_error("Nonequal k_s and offsets");
-    for(unsigned int i = 0; i < k_s.size(); i++){
-	auto new_o = offsets[i] - 12. * k_s[i]*k_s[i]*t;
+
+    //Initialize new_offset vector
+    std::vector<complex<double>> new_offsets;
+    new_offsets.reserve(k_s.size());
+
+    int s = k_s.size();
+    for(int i = 0; i < s; i++){
+	//New offset at time t as function of intial one
+	complex<double> new_o = offsets[i] - 12. * k_s[i]*k_s[i]*t;
 	new_offsets.emplace_back(new_o);
     }
+
     return new_offsets;
 }
 
-constexpr unsigned long max_points=120;
+constexpr unsigned long max_points=2*N;
 int addPointsToData(const std::vector<Point>& cpoints, std::vector<double>& data){
     //We add the critical points to data.
-    //If there are less than 6, (To be adapted maybe later on for larger N), we add a padding
-    //If more than six, just skip.
+    //If there are less than max_points, (To be adapted maybe later on for larger N), we add a padding
+    //If more than max_points, just skip.
     if(cpoints.size() > max_points){
 	cout << "Too many points for writing to numpy" << endl;
 	return 0;
     }
     int emplaced = 0;
 
-    for(const auto& p : cpoints){
+    for(const Point& p : cpoints){
 	data.emplace_back(p.x); data.emplace_back(p.y);
 	emplaced++;
     }
     //Now add dummy points
-    for(int i = 0; i + emplaced < max_points; i++){
+    for(int i = 0; (i + emplaced) < (int)(max_points); i++){
 	data.emplace_back(std::numeric_limits<double>::quiet_NaN());
 	data.emplace_back(std::numeric_limits<double>::quiet_NaN());
     }
@@ -98,87 +161,107 @@ int addPointsToData(const std::vector<Point>& cpoints, std::vector<double>& data
 }
 
 
-// !!! We suppose params.txt is well formatted, see above
 int main(){
-    const string input_file = "params.txt";
+
+    //Input/output files
+    const string paramfile = "global.params";
+    const string solitonfile = "solitons.dat";
     const string output_dir = "Output/";
-    const bool use_random = true;
-    double x_min = -1.; double x_max = 1.;
-    double y_min = -1.; double y_max = 1.;
-    double max_mod_k = 1.;
-    fstream file;
+
+    //Generate random solitons?
+    const bool use_random = false;
+
+    //Read config
+    auto config = Config(paramfile);
+
 
     auto k_s = vector<complex<double>>{};
     auto offsets = vector<complex<double>>{};
 
-    file.open(input_file, ios::in);
-    //Get config
-    auto config = Config(file);
 
     cout << "Take a moment to check parameters please. " << endl;
     config.Print();
 
     //Get soliton parameters
     if(use_random){
+	//---PARAMETERS FOR RANDOM SOLITON GEN---
+	//---COULD BE IN A SEPERATE CONFIG FILE--
+	double x_min = -1.; double x_max = 1.;
+	double y_min = -1.; double y_max = 1.;
+	double max_mod_k = 1.;
+	//---------------------------------------
+
+	//Initialize random number generator
 	std::random_device dev;
 	myRNG rng(dev());
+
+	//Generate parameters
 	k_s = randomKs(rng, max_mod_k);
 	offsets = randomOffsets(rng, x_min, x_max, y_min, y_max);
     }
     else{
-	readParameters(file, k_s, offsets);
+	//Read soliton parameters from file
+	readParameters(solitonfile, k_s, offsets);
     }
-    //Print Solitons
-    for(const auto & k : k_s)
+
+    //----PRINT OUT INITIAL SOLITON PARAMS-------
+    for(const complex<double> & k : k_s)
 	cout << k << ", ";
     cout << endl;
     char dummy;
     cin >> dummy;
+    //-------------------------------------------
 
-    file.close();
-
+    //Check that number of poles is 
+    //same as number in global.hpp
     int pole_number = k_s.size();
     assert(pole_number == N);
 
-    double current_time = config.t_i;
-    double final_time = config.t_f;
-    int steps = (final_time - current_time)/config.t_step + 1;
-    
+    //Define t params
+    double current_time = config.t_start;
+    double final_time = config.t_end;
+    int steps = config.t_points;
+    double t_step = (final_time - current_time)/steps;
+
+    //vector for writing critical pts
     std::vector<double> data;
-    data.reserve(12*steps+5); // A priori two coordinates, and 6 critical points per step
+    data.reserve(2*max_points*steps + 1); // A priori two coordinates, and max_points critical pts per step
     unsigned long written = 0;
-    while(current_time < config.t_f){
+
+    //Loop over t values
+    while(current_time < config.t_end){
 
 	cout << "Time = " << current_time << endl;
+
+	//Evolve intial offsets for current time
 	std::cout << "Evolving offsets" << endl;
 	auto t_offsets = evolveOffsets(current_time, k_s, offsets);
-	cout << "Fetching initial condition" << endl;
+	
 	//Initialize poles
-	auto [p, v] = initialConditions(k_s, t_offsets, config.y_i);
-	PoleState poles(config.y_i, p, v);
-	for(int i = 0; i < N; i++)
-	    cout << "("<<v(0,i) <<"," << v(1, i) <<")";
-	cout << endl;
-	//Vector to save
-	int total_pt_estimate = floor((config.y_f - config.y_i)/config.y_write_step);
+	cout << "Fetching initial condition" << endl;
+	auto [p, v] = initialConditions(k_s, t_offsets, config.y_start);
+	PoleState poles(config.y_start, p, v);
+	
+	//Vector to save at each y
+	int total_pt_estimate = config.y_points;
 	std::vector<std::unique_ptr<SavedState>> states;
 	states.reserve(1.5*total_pt_estimate);
 
-	//Initialize loop parameters
+	//Initialize y loop parameters
+	double y_step = config.cms_step;
+	double y_write_step = (config.y_end - config.y_start)/config.y_points;
+	double current_y = config.y_start;
 
-	double current_y = config.y_i;
-	double next_write_y = config.y_i;
-	int write_step = config.y_write_step/config.y_step;
-	int curr_step = 0;
+	double y_write_next = config.y_start;
+	
 	cout << "Starting y loop" << endl;
-	Eigen::VectorXd x_vals = Eigen::VectorXd::LinSpaced(config.x_points, config.x_i, config.x_f);
-	while(current_y < config.y_f){
-	    if(curr_step%write_step ==0){
+	Eigen::VectorXd x_vals = Eigen::VectorXd::LinSpaced(config.x_points, config.x_start, config.x_end);
+	while(current_y < config.y_end){
+	    if(current_y < (y_write_next + 1e-6)){
 		poles.insertInto(states);
-		next_write_y += config.y_write_step;
+		y_write_next += y_write_step;
 	    }
-	    curr_step++;
-	    poles.evolveRK4(config.y_step);
+	    poles.evolveRK4(y_step);
 	    current_y = poles.y;
 	}
 	cout << "Finished CMS evolution." << endl;
@@ -190,8 +273,8 @@ int main(){
 	Eigen::VectorXd prev_phi_x, prev_phi_y;
 	cout << "Now looking for critical pts" << endl; 
 	if (!states.empty()) {
-	    prev_phi_x = phiX(*states[0], config.x_i, config.x_f, config.x_points);
-	    prev_phi_y = phiY(*states[0], config.x_i, config.x_f, config.x_points);
+	    prev_phi_x = phiX(*states[0], config.x_start, config.x_end, config.x_points);
+	    prev_phi_y = phiY(*states[0], config.x_start, config.x_end, config.x_points);
 	}
 
 	for (std::size_t i = 0; i + 1 < states.size(); ++i) {
@@ -199,8 +282,8 @@ int main(){
 	    SavedState& next    = *states[i + 1];
 
 	    // reuse prev_phi_x/prev_phi_y for current
-	    Eigen::VectorXd phi_x_next = phiX(next, config.x_i, config.x_f, config.x_points);
-	    Eigen::VectorXd phi_y_next = phiY(next, config.x_i, config.x_f, config.x_points);
+	    Eigen::VectorXd phi_x_next = phiX(next, config.x_start, config.x_end, config.x_points);
+	    Eigen::VectorXd phi_y_next = phiY(next, config.x_start, config.x_end, config.x_points);
 
 	    double y1 = current.y;
 	    double y2 = next.y;
@@ -226,7 +309,7 @@ int main(){
 
 	cout << "Finished. Got " << critical_points.size() << " critical points.";
 	written += addPointsToData(critical_points, data);
-	current_time += config.t_step;
+	current_time += t_step;
     }
 
     //Writing to .npy

@@ -10,6 +10,7 @@
 //with bilinear interpolation
 using array = std::array<double, 4>;
 using sol_array = std::array<double, 2>;
+using matrix = std::array<std::array<double, 2>,2>;
 
 constexpr double det(const double a, const double b, const double c, const double d) noexcept{
     return a*b-c*d;
@@ -27,11 +28,8 @@ inline int roots(const double c0, const double c1, const double c2, sol_array& y
      if((0.<=sol_2) && (sol_2 <= 1.)){
          y_sols[1] = sol_2; returned++;
      }
-//     std::cout << "got 2 roots!" << std::endl;
-//     std::cout << sol_1 << " " << sol_2 << std::endl;
      return returned;
 }
-
 inline int addif(int idx, const double y_sol, const array& ga, sol_array& x_sols){
     //Adds x_root corresponding to y root, only if within correct range
     //returns 0 if none added, 1 if added
@@ -65,7 +63,9 @@ inline int getReducedZeros(const array& ga, const array& gb, sol_array& x_sols, 
     }
     return returned;
 }
-
+inline int filterSaddle(sol_array& x_sol, sol_array& y_sol, const array& ga, const array& gb){
+    return 0; //TODO FINISH
+}
 //Now, imagine we have 4 corners, and the 4 values
 //Supposes array correspond to points (0, 0), (0, 1), (1, 0), (1,1) in terms of corners
 inline std::vector<Point> getZeros(const sol_array& xc, const sol_array& yc, const array& phi_x, const array& phi_y){

@@ -5,7 +5,7 @@ CXXFLAGS := -std=c++17 -Wall -Iinclude -I/usr/include/eigen3/ -O3
 # Directories
 SRC_DIR  := src
 BUILD_DIR := build
-TARGET  := main
+TARGET  := bin/main
 
 # Sources and objects
 SRCS    := $(wildcard $(SRC_DIR)/*.cpp)
@@ -26,7 +26,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 
 # Clean build artifacts
 clean:
-	rm -rf $(BUILD_DIR) $(TARGET)
+	rm -rf $(BUILD_DIR) $(TARGET) Output/*
 
 # Rebuild everything from scratch
 rebuild: clean all

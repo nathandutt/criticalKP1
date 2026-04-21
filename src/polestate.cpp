@@ -3,6 +3,7 @@
 #include <iostream>
 
 //Force computation
+//disclaimer : this function was written with help of LLM
 Column F(const Column& m, double& max_c) {
     // m.row(0) = x coordinates, m.row(1) = y coordinates
     Column f = Column::Zero();
@@ -34,7 +35,7 @@ Column F(const Column& m, double& max_c) {
 
     // Sum contributions for each i
     f.row(0) = contrib_x.colwise().sum();
-    f.row(1) = contrib_y.colwise().sum();
+    f.row(1) = contrib_y.colwise().sum(); //Note: colwise sum gives us a -, that's why we multiply by -2 at the end.
     if(max_c < 0.){ 
 	Eigen::Array<double, 1, N> magnitudes =
 	    (f.row(0).array().square() + f.row(1).array().square()).sqrt();
@@ -46,7 +47,7 @@ Column F(const Column& m, double& max_c) {
     return f;
 }
 
-constexpr double adaptative_pow = 1.;
+constexpr double adaptative_pow = 1./3.;
 void PoleState::evolveRK4(const double timestep){
     //RK4 evolution with adaptative timestep
     double max_c = -1.;
@@ -54,11 +55,13 @@ void PoleState::evolveRK4(const double timestep){
     //first k
     Column k1_p = velocity;
     Column k1_v = F(poles, max_c);
+
     //Define adaptative timestep
-    if(max_c > 1e6) 
+    if(max_c > 1e10) 
 	throw std::runtime_error("Numerical error");
     double astep = (max_c < 1.) ? timestep : timestep*std::pow(max_c, -adaptative_pow);
 
+    //Calculate intermediate RK4 steps
     Column k2_p = velocity + (0.5*astep)*k1_v;
     Column k2_v = F(poles + (0.5*astep)*k1_p, max_c);
 

@@ -1,0 +1,16 @@
+# EVOLUTION PARAMETERS
+
+t_start 	0.
+t_end		10.
+t_points	100.
+
+y_start 	-10.
+y_end		10.
+y_points	200.
+cms_step	0.01
+
+x_start		-10.
+x_end		10.
+x_points	200.
+
+

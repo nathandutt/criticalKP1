@@ -1,6 +1,14 @@
+/*
+ * Here we compute initial pole positions for a given y and offsets
+ * to do so we diagonalize a 2N x 2N hirota matrix, poles are given
+ * by eigenvalues and pole velocities by sandwiching the K vector with
+ * eigenvectors : d/dt Z = <\phi| K |\phi> (K = d/dt Hirota)
+ */
 #include <stdexcept>
-#include "initialcondition.hpp"
 #include "global.hpp"
+#include "initialcondition.hpp"
+
+//Custom shorter type names
 using complex = std::complex<double>;
 using Matrix  = Eigen::MatrixXcd;
 using Vector  = Eigen::VectorXcd;

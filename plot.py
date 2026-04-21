@@ -84,7 +84,7 @@ ani = FuncAnimation(
         fig,
         update,
         frames=T,
-        interval=20000 // T,
+        interval=5000// T,
         blit=True
         )
 
